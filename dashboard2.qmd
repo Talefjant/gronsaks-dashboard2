@@ -1,0 +1,378 @@
+---
+title: "Den store grønsaksutfordringa 2026"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    css: styles.css
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+https://docs.google.com/spreadsheets/d/1kjO8CH6KSam6Ne0IFO36eGf_dbU_TRWvUjm8zAdve80/edit?usp=sharing
+```{r}
+library(tidyverse)
+library(lubridate)
+library(DT)
+library(googlesheets4)
+library(scales)
+
+```
+
+
+1) Data (dummy - bytast til Google Sheet)
+
+```{r}
+# KODE: limer inn dataene dine som tekst
+
+# raw_txt <- "
+# Veke\tDato\tDag\tSigrun\tKnut_Olav\tTale\tMarleny\tMarianne
+# 2\t05.01\tMandag\t4\t6\t7\t3\t8
+# 2\t06.01\ttirsdag\t5\t5\t5\t6\t7
+# 2\t07.01\tonsdag\t7\t6\t3\t5\t6
+# 2\t08.01\ttorsdag\t8\t4\t4\t4\t4
+# 2\t09.01\tfredag\t3\t8\t6\t8\t3
+# 2\t10.01\tlørdag\t6\t7\t5\t7\t5
+# 2\t11.01\tsøndag\t5\t6\t4\t6\t6
+# 3\t12.01\tmandag\t\t\t\t\t
+# 3\t13.01\ttirsdag\t\t\t\t\t
+# 3\t14.01\tonsdag\t\t\t\t\t
+# 3\t15.01\ttorsdag\t\t\t\t\t
+# 3\t16.01\tfredag\t\t\t\t\t
+# 3\t17.01\tlørdag\t\t\t\t\t
+# 3\t18.01\tsøndag\t\t\t\t\t
+# 4\t19.01\tmandag\t\t\t\t\t
+# 4\t20.01\ttirsdag\t\t\t\t\t
+# 4\t21.01\tonsdag\t\t\t\t\t
+# 4\t22.01\ttorsdag\t\t\t\t\t
+# 4\t23.01\tfredag\t\t\t\t\t
+# 4\t24.01\tlørdag\t\t\t\t\t
+# 4\t25.01\tsøndag\t\t\t\t\t
+# 5\t26.01\tmandag\t\t\t\t\t
+# 5\t27.01\ttirsdag\t\t\t\t\t
+# 5\t28.01\tonsdag\t\t\t\t\t
+# 5\t29.01\ttorsdag\t\t\t\t\t
+# 5\t30.01\tfredag\t\t\t\t\t
+# 5\t31.01\tlørdag\t\t\t\t\t
+# 5\t01.02\tsøndag\t\t\t\t\t
+# 6\t02.02\tmandag\t\t\t\t\t
+# 6\t03.02\ttirsdag\t\t\t\t\t
+# 6\t04.02\tonsdag\t\t\t\t\t
+# 6\t05.02\ttorsdag\t\t\t\t\t
+# 6\t06.02\tfredag\t\t\t\t\t
+# 6\t07.02\tlørdag\t\t\t\t\t
+# 6\t08.02\tsøndag\t\t\t\t\t
+# "
+
+# KODE: leser data direkte frå Google Sheets
+
+library(googlesheets4)
+
+gs4_deauth()  # <-- viktig for render
+
+sheet_url <- "https://docs.google.com/spreadsheets/d/1kjO8CH6KSam6Ne0IFO36eGf_dbU_TRWvUjm8zAdve80/edit?usp=sharing"
+
+df_wide <- read_sheet(
+  sheet_url,
+  col_types = "icccccccc"  # Veke = int, resten character
+)
+
+df_wide <- df_wide |>
+  mutate(
+    Veke = as.integer(Veke),
+    Dato = dmy(paste0(Dato, ".2026")),
+    Dag  = str_to_title(Dag)
+  )
+
+df_long <- df_wide |>
+  pivot_longer(
+    cols = c("Sigrun", "Knut_Olav", "Tale", "Marleny", "Marianne", "Eline"),
+    names_to = "Person",
+    values_to = "Score"
+  ) |>
+  mutate(
+    Score = suppressWarnings(as.numeric(Score)),
+    Dag = str_trim(Dag),
+    Dag = str_to_title(Dag),
+    Dag = factor(
+      Dag,
+      levels = c("Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag","Søndag")
+    )
+  )
+
+
+```
+
+```{r}
+# KODE: beregner KPI-er
+
+kpi_total <- sum(df_long$Score, na.rm = TRUE)
+kpi_snitt <- mean(df_long$Score, na.rm = TRUE)
+kpi_max   <- max(df_long$Score, na.rm = TRUE)
+kpi_dager <- n_distinct(df_long$Dato)
+
+kpi_registrert <- sum(!is.na(df_long$Score))
+
+
+```
+
+## Oversikt (alle) {.tabset}
+
+### Forside
+
+::: {.columns}
+::: {.column width="25%"}
+::: {.card}
+
+### Total
+`r scales::comma(kpi_total)`
+:::
+:::
+
+::: {.column width="25%"}
+::: {.card}
+
+### Snitt
+`r round(kpi_snitt, 2)`
+:::
+:::
+
+::: {.column width="25%"}
+::: {.card}
+
+### Maks
+`r kpi_max`
+:::
+:::
+
+::: {.column width="25%"}
+::: {.card}
+
+### Registrerte datapunkt
+`r kpi_registrert`
+
+:::
+:::
+:::
+
+---
+
+::: {.card}
+### Heatmap (alle deltakarar)
+```{r, fig.height=4.2}
+df_long |>
+ggplot(aes(x = Dato, y = fct_rev(Person), fill = Score)) +
+geom_tile() +
+scale_fill_gradientn(
+  colours = c("#5A2A5E", "#2F5D9F", "#00B4D8")) +
+labs(x = NULL, y = NULL, fill = "Grønsakspoeng") +
+scale_x_date(date_labels = "%d.%m", date_breaks = "3 days") +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+:::
+::: {.columns}
+::: {.column width="50%"}
+::: {.card}
+
+Ukedagsmønster (snitt)
+```{r}
+tmp <- df_long |>
+  mutate(
+    Dag = stringr::str_trim(Dag),
+    Dag = stringr::str_to_title(Dag),
+    Dag = factor(Dag, levels = c("Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag","Søndag"))
+  ) |>
+  filter(!is.na(Score)) |>
+  group_by(Dag) |>
+  summarise(Snitt = mean(Score), .groups = "drop") |>
+  filter(!is.na(Snitt)) |>
+  droplevels()
+
+ggplot(tmp, aes(x = Dag, y = Snitt)) +
+  geom_col(width = 0.7, fill = "#00B4D8") +
+  labs(x = NULL, y = "Gjennomsnittleg score") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+:::
+:::
+::: {.column width="50%"}
+::: {.card}
+
+Trend per veke (sum)
+```{r}
+df_long |>
+  group_by(Veke, Person) |>
+  summarise(Ukesum = sum(Score), .groups = "drop") |>
+  ggplot(aes(x = Veke, y = Ukesum, color = Person)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_color_manual(
+    values = c(
+      "Sigrun"    = "#00B4D8",
+      "Knut_Olav" = "#5A4FCF",
+      "Tale"      = "#1B7F79",
+      "Marleny"   = "#9B5DE5",
+      "Marianne"  = "#4A6FA5"
+    )
+  ) +
+  labs(
+    x = "Veke",
+    y = "Grønsakspoeng",
+    color = "Deltakar"
+  ) +
+  theme_classic() +
+  theme(
+  legend.position = "bottom",
+  legend.title = element_text(size = 10),
+  legend.text  = element_text(size = 9)
+)
+```
+
+:::
+:::
+:::
+
+::: {.card}
+Kumulativ score (totalt)
+```{r}
+
+df_long |>
+arrange(Dato) |>
+group_by(Dato) |>
+summarise(Dagssum = sum(Score, na.rm = TRUE), .groups = "drop") |>
+arrange(Dato) |>
+mutate(Kumulativ = cumsum(Dagssum)) |>
+ggplot(aes(Dato, Kumulativ)) +
+geom_line(linewidth = 1) +
+geom_point(size = 1.8) +
+labs(x = "Dato", y = "Kumulativ poengsum (alle)") +
+theme_classic() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+:::
+Rådata
+::: {.card}
+
+Interaktiv tabell (wide)
+```{r}
+DT::datatable(
+df_wide,
+options = list(pageLength = 10, scrollX = TRUE),
+rownames = FALSE
+)
+```
+
+:::
+## Per person {.tabset .tabset-pills}
+
+### Tale
+```{r}
+df_p <- df_long |> dplyr::filter(Person == "Tale")
+```
+
+
+::: {.card}
+
+#### Kumulativ score
+
+```{r, fig.height=3.6}
+df_p |>
+  arrange(Dato) |>
+  mutate(Kumulativ = cumsum(replace_na(Score, 0))) |>
+  ggplot(aes(Dato, Kumulativ)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.8) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+:::
+
+::: {.columns}
+
+::: {.column width="50%"}
+::: {.card}
+
+#### Boxplot
+
+```{r, fig.height=3.2}
+ggplot(df_p, aes(x = Person, y = Score)) +
+  geom_boxplot(width = 0.4) +
+  theme_classic()
+```
+
+:::
+:::
+
+::: {.column width="50%"}
+::: {.card}
+
+#### Ukedagsmønster
+```{r, fig.height=3.2}
+df_p |>
+mutate(
+Dag = stringr::str_trim(Dag),
+Dag = stringr::str_to_title(Dag),
+Dag = factor(Dag, levels = c("Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag","Søndag"))
+) |>
+filter(!is.na(Score), !is.na(Dag)) |>
+group_by(Dag) |>
+summarise(Snitt = mean(Score), .groups = "drop") |>
+droplevels() |>
+ggplot(aes(Dag, Snitt)) +
+geom_col(width = 0.7, fill = "#00B4B8") +
+labs(x = NULL, y = "Gjennomsnittleg score") +
+theme_classic() +
+theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+:::
+:::
+
+:::
+
+<!-- ::: {.card} -->
+<!-- #### Tabell – r valgt_person -->
+
+<!-- ```{r} -->
+<!-- DT::datatable( -->
+<!-- df_p |> select(Veke, Dato, Dag, Person, Score), -->
+<!-- options = list(pageLength = 10), -->
+<!-- rownames = FALSE -->
+<!-- ) -->
+<!-- ``` -->
+
+### Marleny
+```{r}
+df_p <- df_long |> filter(Person == "Marleny")
+```
+
+::: {.card}
+
+Kumulativ score – r valgt_person
+
+```{r}
+df_p |>
+arrange(Dato) |>
+mutate(Kumulativ = cumsum(replace_na(Score, 0))) |>
+ggplot(aes(Dato, Kumulativ)) +
+geom_line(linewidth = 1) +
+geom_point(size = 1.8) +
+labs(x = "Dato", y = "Kumulativ poengsum") +
+theme_classic() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+:::
+```{r}
+head(df_wide)
+summary(df_long$Score)
+
+```
+
